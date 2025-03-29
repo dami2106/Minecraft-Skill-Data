@@ -1,5 +1,14 @@
-.DS_Store
-Data/.DS_Store
-Data/.DS_Store
+# Ignore all .DS_Store files
+**/.DS_Store
+
+# Ignore Python cache files and folders
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore pickle files
 *.pkl
-output/.DS_Store
+
+# Ignore the entire Data/ folder
+Data/
