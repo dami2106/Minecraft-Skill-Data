@@ -1,99 +1,70 @@
-import re
-import json 
+import numpy as np
+import cv2
 
-def get_skill_changepoints(state_dict):
-    change_points = []
+KEYWORDS = [
+    'log',
+    'planks',
+    'stick',
+    'crafting_table',
+    'stone',
+    'dirt',
+    'cobblestone',
+    'wooden_pickaxe',
+    'stone_pickaxe',
+    'iron_pickaxe',
+    'coal',
+    'iron_ore',
+    'torch',
+    'iron_ingot',
+    'furnace'
+]
 
-    for i in range(1, len(state_dict)):
-        previous = state_dict[i - 1]
-        current = state_dict[i]
-        
-        # Check each item in the current inventory
-        for item, current_value in current.items():
-            previous_value = previous.get(item, 0)
-            if current_value > previous_value:
-                change_points.append((item, i))
+def find_inventory_activity(inventory_list):
+    activity_steps = []
+    prev = inventory_list[0]
+    prev_step = 0
+    prev_resource = None
+    first_change = True
+
+    def matches_target(key):
+        return any(keyword in key for keyword in KEYWORDS)
+
+    for i in range(1, len(inventory_list)):
+        curr = inventory_list[i]
+        for key in curr:
+            if matches_target(key) and curr[key] > prev.get(key, 0):
+                if first_change:
+                    activity_steps.extend([key] * i)
+                    first_change = False
+                else:
+                    activity_steps.extend([prev_resource] * (i - prev_step))
+                prev_resource = key
+                prev_step = i
+        prev = curr
+
+    if prev_resource is not None:
+        activity_steps.extend([prev_resource] * (len(inventory_list) - prev_step))
     
-    return change_points
+    # Use map_material to format the strigns
+    activity_steps = [map_material(item) for item in activity_steps]
 
-def get_skills(change_points):
-    lines = []     
-    prev_total = 0 
-    group_sum = 0  
-    prev_key = None
+    return "\n".join(activity_steps)
 
-    for key, value in change_points:
-        if key == prev_key:
-            count = value - prev_total
-        else:
-            count = value - prev_total
-            
-        for _ in range(count):
-            lines.append(key)
-        prev_total = value
-        prev_key = key
-
-    final_string = "\n".join(lines)
-    return final_string
-
-def transform_string(s):
-    return re.sub(r'.*(log|planks).*', r'\1', s, flags=re.IGNORECASE)
-
-def get_unique_dict_items(data):
-    item_names = set()
-    for inv_dict in data:
-        for entry_ in inv_dict.values():
-            item_names.add(transform_string(entry_['type']))
+def map_material(material):
+    material = material.lower()
     
-    item_names.remove('none')
-    return dict.fromkeys(item_names, 0)
-
-def minestudio_inv_to_skills(minestudio_inv):
-    better_dict = get_unique_dict_items(minestudio_inv)
-
-
-    all_better_dicts = []
-
-    #Use this to filter out noise like picking up random stuff
-    allowed_items = [
-        'planks',
-        'log',
-        'crafting_table',
-        'stick',
-        'wooden_pickaxe'
-    ]
-
-    for inv_dict in minestudio_inv:
-        for _, inv_info in inv_dict.items():
-            item_name = transform_string(inv_info['type'])
-            item_qty = inv_info['quantity']
-            if item_name in allowed_items:
-                better_dict[item_name] = item_qty
-
-            if item_name not in allowed_items and item_name != 'none':
-                print("Missed: ", item_name)
-
-        all_better_dicts.append(better_dict.copy())
-
-    changepoints = get_skill_changepoints(all_better_dicts)
-
-    skills = get_skills(changepoints)
-
-    return skills 
-
-def check_episode_done(inv_dict, item, qty):
-    for _, inv_details in inv_dict.items():
-        item_name = transform_string(inv_details['type'])
-        item_qty = inv_details['quantity']
-        if item_name == item and item_qty >= qty:
-            return True
-        
-    return False
+    if 'log' in material:
+        return 'log'
+    elif 'planks' in material:
+        return 'planks'
+    else:
+        return material
 
 
-if __name__ == '__main__':
-
-    with open("inv_data.json", "rb") as file:
-        loaded_data = json.load(file)
-
-    print(check_episode_done(loaded_data[-1], "wooden_pickaxe", 1))
+def resize_and_format(obs):
+    pov_bgr = cv2.cvtColor(obs, cv2.COLOR_RGB2BGR)
+    pov_resized = cv2.resize(pov_bgr, (128, 128), interpolation=cv2.INTER_NEAREST)
+    # pov_resized = cv2.resize(pov_bgr, (128, 128), interpolation=cv2.INTER_AREA)
+    pov_rgb = cv2.cvtColor(pov_resized, cv2.COLOR_BGR2RGB)  # convert back to RGB
+    pov_float = pov_rgb.astype(np.float32)
+    return pov_float

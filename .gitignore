@@ -1,14 +1,15 @@
-# Ignore all .DS_Store files
-**/.DS_Store
-
-# Ignore Python cache files and folders
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Ignore pickle files
-*.pkl
-
-# Ignore the entire Data/ folder
+# Ignore everything in the Data folder
 Data/
+
+# Ignore everything in the Logs folder
+logs/
+
+# Ignore all .weights files
+*.weights
+
+# Ignore all .model files
+*.model
+
+# Ignore all __pycache__ folders
+__pycache__/
+**/__pycache__/
