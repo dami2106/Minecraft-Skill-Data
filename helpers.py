@@ -66,5 +66,5 @@ def resize_and_format(obs):
     pov_resized = cv2.resize(pov_bgr, (128, 128), interpolation=cv2.INTER_NEAREST)
     # pov_resized = cv2.resize(pov_bgr, (128, 128), interpolation=cv2.INTER_AREA)
     pov_rgb = cv2.cvtColor(pov_resized, cv2.COLOR_BGR2RGB)  # convert back to RGB
-    pov_float = pov_rgb.astype(np.float32)
-    return pov_float
+    # pov_float = pov_rgb.astype(np.float32)
+    return pov_rgb

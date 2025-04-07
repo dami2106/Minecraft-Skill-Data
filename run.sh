@@ -5,7 +5,7 @@ MODEL="2x.model"
 WEIGHTS="rl-from-early-game-2x.weights"
 TARGET_ITEM="iron_ingot"
 MAX_STEPS=2500
-EPISODES=100
+EPISODES=101  # Number of episodes to run     
 SAVE_DIR="Data/$TARGET_ITEM"
 
 # ====== Run Command ======
