@@ -16,3 +16,10 @@ xvfb-run python run_agent.py \
   --max-steps "$MAX_STEPS" \
   --episodes "$EPISODES" \
   --save-dir "$SAVE_DIR"
+
+# ====== Run the get_data_stats file ======
+python get_data_stats.py \
+  --data-dir "$SAVE_DIR"
+
+# ====== Print that we are done ======
+echo "Data generation and statistics collection completed."
