@@ -3,9 +3,9 @@
 # ====== Configurable Parameters ======
 MODEL="2x.model"
 WEIGHTS="rl-from-early-game-2x.weights"
-TARGET_ITEM="iron_ingot"
-MAX_STEPS=2500
-EPISODES=101  # Number of episodes to run     
+TARGET_ITEM="wooden_pickaxe"
+MAX_STEPS=1000
+EPISODES=3  # Number of episodes to run     
 SAVE_DIR="Data/$TARGET_ITEM"
 
 # ====== Run Command ======
