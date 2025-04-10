@@ -23,6 +23,8 @@ if __name__ == "__main__":
 
     # List all the files in the args.data_dir directory
     files = os.listdir(args.data_dir + "/groundTruth")
+    mapping_dir = os.path.join(args.data_dir, "mapping")
+    os.makedirs(mapping_dir, exist_ok=True)
 
     for file in files:
         # Open the JSON file and load its contents
@@ -49,3 +51,14 @@ if __name__ == "__main__":
     # Save the stats to a JSON file
     with open(os.path.join(args.data_dir, "stats.json"), 'w') as f:
         json.dump(stats, f, indent=4)
+
+    #Create a mapping of i -> skill 
+    skill_mapping = {i: skill for i, skill in enumerate(ground_truth_skills)}
+    # Save the mapping to a txt file in the form i skill\n
+    with open(os.path.join(mapping_dir, "mapping.txt"), "w") as f:
+        for i, skill in skill_mapping.items():
+            line = f"{i} {skill}"
+            if i < len(skill_mapping) - 1:
+                f.write(line + "\n")
+            else:
+                f.write(line)

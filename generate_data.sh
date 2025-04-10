@@ -4,8 +4,8 @@
 MODEL="2x.model"
 WEIGHTS="rl-from-early-game-2x.weights"
 TARGET_ITEM="wooden_pickaxe"
-MAX_STEPS=1000
-EPISODES=3  # Number of episodes to run     
+MAX_STEPS=800
+EPISODES=100  # Number of episodes to run     
 SAVE_DIR="Data/$TARGET_ITEM"
 
 # ====== Run Command ======
