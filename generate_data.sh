@@ -1,14 +1,34 @@
 #!/bin/bash
 
+# ====== Task to Run ======
+TARGET_ITEM="wooden_pickaxe"  # Change this to run a different task
+
 # ====== Configurable Parameters ======
 MODEL="2x.model"
 WEIGHTS="rl-from-early-game-2x.weights"
-TARGET_ITEM="wooden_pickaxe"
-MAX_STEPS=800
-EPISODES=100  # Number of episodes to run     
+EPISODES=100
 SAVE_DIR="Data/$TARGET_ITEM"
 
+# ====== Step Count Lookup ======
+declare -A STEP_LOOKUP=(
+  ["wooden_pickaxe"]=800
+  ["cobblestone"]=1000
+  ["stone_pickaxe"]=1500
+  ["iron_ingot"]=2500
+)
+
+# ====== Check for valid task ======
+if [[ -z "${STEP_LOOKUP[$TARGET_ITEM]}" ]]; then
+  echo "Error: Unknown target item '$TARGET_ITEM'."
+  echo "Valid options are: ${!STEP_LOOKUP[@]}"
+  exit 1
+fi
+
+MAX_STEPS="${STEP_LOOKUP[$TARGET_ITEM]}"
+
 # ====== Run Command ======
+echo "Running task: $TARGET_ITEM with $MAX_STEPS steps."
+
 xvfb-run python run_agent.py \
   --model "$MODEL" \
   --weights "$WEIGHTS" \
@@ -21,5 +41,5 @@ xvfb-run python run_agent.py \
 python get_data_stats.py \
   --data-dir "$SAVE_DIR"
 
-# ====== Print that we are done ======
-echo "Data generation and statistics collection completed."
+# ====== Done ======
+echo "Data generation and statistics collection completed for $TARGET_ITEM."
