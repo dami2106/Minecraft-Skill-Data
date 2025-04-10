@@ -13,3 +13,4 @@ logs/
 # Ignore all __pycache__ folders
 __pycache__/
 **/__pycache__/
+.DS_Store
