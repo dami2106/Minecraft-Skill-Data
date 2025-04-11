@@ -7,18 +7,12 @@ from sklearn.decomposition import IncrementalPCA
 import joblib
 import random
 from argparse import ArgumentParser
-
-
-
 import glob
 import numpy as np
 from sklearn.decomposition import IncrementalPCA
 import psutil
 import os
-
 from tqdm import tqdm
-
-
 import os
 import glob
 import psutil
@@ -28,9 +22,10 @@ from sklearn.decomposition import IncrementalPCA
 import joblib
 from matplotlib.backends.backend_pdf import PdfPages
 from PIL import Image
+import cv2
+import matplotlib.animation as animation
 
-
-def run_pca(args):
+def run_pca(args, every_n=3):  # NEW: add sampling frequency as a parameter
     mem_info = psutil.virtual_memory()
     total_mem_mb = mem_info.total / (1024 ** 2)
     print(f"Total memory available: {total_mem_mb:.2f} MB")
@@ -38,54 +33,59 @@ def run_pca(args):
     numpy_files = sorted(glob.glob(args.data_dir + "/observations/*"))
     process = psutil.Process(os.getpid())
 
-    all_shapes = [np.load(f, allow_pickle=True).shape[0] for f in numpy_files]
-    total_samples = sum(all_shapes)
+    # First pass: compute total number of sampled frames
+    total_samples = 0
+    for f in numpy_files:
+        shape = np.load(f, allow_pickle=True).shape[0]
+        sampled_indices = list(range(0, shape, every_n))
+        if sampled_indices[-1] != shape - 1:
+            sampled_indices.append(shape - 1)
+        total_samples += len(sampled_indices)
+    
+    print(f"Total number of sampled frames: {total_samples}")
+
+    # Example shape for flattening
     example = np.load(numpy_files[0], allow_pickle=True)
     flat_shape = np.prod(example.shape[1:])
+    print(f"Flattened shape: {flat_shape}")
     final_array = np.empty((total_samples, flat_shape), dtype=np.float32)
 
     offset = 0
-    img_arr = None
     for file_ in numpy_files:
         data = np.load(file_, allow_pickle=True).astype(np.uint8)
-        print("data shape min and max ", data.shape, data.min(), data.max())
+        print("Loaded raw shape:", data.shape)
 
+        # Sample every nth frame and ensure final frame is included
+        sampled_indices = list(range(0, data.shape[0], every_n))
+        if sampled_indices[-1] != data.shape[0] - 1:
+            sampled_indices.append(data.shape[0] - 1)
+
+        data = data[sampled_indices]
         data = data.astype(np.float32) / 255.0
-        img_arr = data
+        print("Sampled shape after scaling:", data.shape)
 
         data = data.reshape(data.shape[0], -1)
-        print("data shape min and max after proc", data.shape, data.min(), data.max())
+
+        print("Data shape after flattening:", data.shape)
+
+        # Store into final PCA array
         batch_size = data.shape[0]
         final_array[offset:offset + batch_size] = data
-        print("final_array shape min and max ", final_array.shape, final_array.min(), final_array.max())
         offset += batch_size
-        break
 
-        mem = process.memory_info().rss / (1024 ** 2)
-        print(f"Memory usage: {mem:.2f} MB")
+        print(f"Current final_array slice: {offset}/{total_samples}")
 
-    #Save img arr to gif
-    img_arr = np.array(img_arr)
-    # Convert the array to a list of PIL Images
-    frames = [Image.fromarray((frame * 255).astype(np.uint8)) for frame in img_arr]
+    print("Final shape:", final_array.shape)
+    mem = process.memory_info().rss / (1024 ** 2)
+    print(f"Memory usage all loaded: {mem:.2f} MB")
 
-    # Save as a GIF
-    gif_path = os.path.join(args.data_dir, "animation.gif")
-    frames[0].save(gif_path, save_all=True, append_images=frames[1:], duration=100, loop=0)
-
-    print(f"GIF saved to: {gif_path}")
-    
-    # print("Final shape:", final_array.shape)
-    # mem = process.memory_info().rss / (1024 ** 2)
-    # print(f"Memory usage all loaded: {mem:.2f} MB")
-
-    # # Shuffle the data in place
+    # Shuffle the data in place
     np.random.shuffle(final_array)
 
-    # print("\nFitting PCA...")
-    # pca = IncrementalPCA(n_components=100, batch_size=500)
-    # pca.fit(final_array)
-    # print("PCA fitted.")
+    print("\nFitting PCA...")
+    pca = IncrementalPCA(n_components=1000, batch_size=20000)
+    pca.fit(final_array)
+    print("PCA fitted.")
 
     # print("Explained variance by top components:", pca.explained_variance_ratio_[:10])
     # print("Total explained variance:", pca.explained_variance_ratio_.sum())
@@ -95,21 +95,21 @@ def run_pca(args):
     # joblib.dump(pca, model_path)
     # print(f"PCA model saved to: {model_path}")
 
-    # Plotting original and reconstructed images
-    sample_indices = np.random.choice(final_array.shape[0], 10, replace=False)
-    sampled = final_array[sample_indices]
+    # # Plotting original and reconstructed images
+    # sample_indices = np.random.choice(final_array.shape[0], 10, replace=False)
+    # sampled = final_array[sample_indices]
 
-    print(sampled.shape)
+    # print(sampled.shape)
 
-    test_img = sampled[0].reshape(140, 140, 3)  
+    # test_img = sampled[0].reshape(140, 140, 3)  
 
-    print("Sampled image shape:", test_img.shape)
-    print(test_img.min(), test_img.max())
+    # print("Sampled image shape:", test_img.shape)
+    # print(test_img.min(), test_img.max())
 
-    plt.imshow(test_img)
-    plt.axis("off")
-    plt.title("Sampled Image")
-    plt.show()
+    # plt.imshow(test_img)
+    # plt.axis("off")
+    # plt.title("Sampled Image")
+    # plt.show()
 
     #Load pca mdoel
     # model_path = os.path.join(args.data_dir, "pca_model.joblib")
@@ -252,7 +252,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--data-dir", type=str, default="Data/wooden_pickaxe")
     parser.add_argument("--components", type=int, default=1000)
-    parser.add_argument("--episode-batch", type=int, default=20)
+    parser.add_argument("--batch-size", type=int, default=8000)
 
     args = parser.parse_args()
 
