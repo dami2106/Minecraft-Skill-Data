@@ -58,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument("--save-dir", type=str, default="Data/Test")
 
     args = parser.parse_args()
-    agent, env = setup_agent_env(args)
+    agent, env = setup_agent_env(args) 
 
     os.makedirs(args.save_dir, exist_ok=True)
     obs_dir = os.path.join(args.save_dir, "observations")
@@ -111,8 +111,6 @@ if __name__ == "__main__":
             obs_list = np.array(obs_list)
             obs_path = os.path.join(obs_dir, f"minecraft_{curr_episode_nb}.npy")
             np.save(obs_path, obs_list)
-
-
 
     env.close()
 

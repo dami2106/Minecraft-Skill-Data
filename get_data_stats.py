@@ -1,14 +1,8 @@
 from argparse import ArgumentParser
-import pickle
-from minerl.herobraine.env_specs.human_survival_specs import HumanSurvival
-from agent import MineRLAgent, ENV_KWARGS
-import gym
-import helpers as hp
 import os
 from collections import Counter
 import json
-from PIL import Image
-import numpy as np
+
 
 if __name__ == "__main__":
     parser = ArgumentParser("Run pretrained models on MineRL environment")

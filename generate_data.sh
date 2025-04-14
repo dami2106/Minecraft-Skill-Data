@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ====== Task to Run ======
-TARGET_ITEM="wooden_pickaxe"  # Change this to run a different task
+TARGET_ITEM="iron_ingot"  # Change this to run a different task
 
 # ====== Configurable Parameters ======
 MODEL="2x.model"
