@@ -24,11 +24,17 @@ from matplotlib.backends.backend_pdf import PdfPages
 from PIL import Image
 import cv2
 import matplotlib.animation as animation
+from sklearn.decomposition import PCA
+import json 
 
-def run_pca(args, every_n=3):  # NEW: add sampling frequency as a parameter
+def run_pca(args):  # NEW: add sampling frequency as a parameter
     mem_info = psutil.virtual_memory()
     total_mem_mb = mem_info.total / (1024 ** 2)
     print(f"Total memory available: {total_mem_mb:.2f} MB")
+
+    #Make directory to store PCA data and ground truth data 
+    os.makedirs(args.data_dir + "/pca_features", exist_ok=True)
+    os.makedirs(args.data_dir + "/pca_groundTruth", exist_ok=True)
 
     numpy_files = sorted(glob.glob(args.data_dir + "/observations/*"))
     process = psutil.Process(os.getpid())
@@ -37,7 +43,7 @@ def run_pca(args, every_n=3):  # NEW: add sampling frequency as a parameter
     total_samples = 0
     for f in numpy_files:
         shape = np.load(f, allow_pickle=True).shape[0]
-        sampled_indices = list(range(0, shape, every_n))
+        sampled_indices = list(range(0, shape, args.frame_freq))
         if sampled_indices[-1] != shape - 1:
             sampled_indices.append(shape - 1)
         total_samples += len(sampled_indices)
@@ -47,28 +53,22 @@ def run_pca(args, every_n=3):  # NEW: add sampling frequency as a parameter
     # Example shape for flattening
     example = np.load(numpy_files[0], allow_pickle=True)
     flat_shape = np.prod(example.shape[1:])
-    print(f"Flattened shape: {flat_shape}")
     final_array = np.empty((total_samples, flat_shape), dtype=np.float32)
 
     offset = 0
     for file_ in numpy_files:
         data = np.load(file_, allow_pickle=True).astype(np.uint8)
-        print("Loaded raw shape:", data.shape)
+        print(f"Processing file: {file_} with shape: {data.shape}")
 
         # Sample every nth frame and ensure final frame is included
-        sampled_indices = list(range(0, data.shape[0], every_n))
+        sampled_indices = list(range(0, data.shape[0], args.frame_freq))
         if sampled_indices[-1] != data.shape[0] - 1:
             sampled_indices.append(data.shape[0] - 1)
 
         data = data[sampled_indices]
         data = data.astype(np.float32) / 255.0
-        print("Sampled shape after scaling:", data.shape)
-
         data = data.reshape(data.shape[0], -1)
 
-        print("Data shape after flattening:", data.shape)
-
-        # Store into final PCA array
         batch_size = data.shape[0]
         final_array[offset:offset + batch_size] = data
         offset += batch_size
@@ -82,180 +82,115 @@ def run_pca(args, every_n=3):  # NEW: add sampling frequency as a parameter
     # Shuffle the data in place
     np.random.shuffle(final_array)
 
-    print("\nFitting PCA...")
-    pca = IncrementalPCA(n_components=1000, batch_size=20000)
-    pca.fit(final_array)
-    print("PCA fitted.")
 
-    # print("Explained variance by top components:", pca.explained_variance_ratio_[:10])
-    # print("Total explained variance:", pca.explained_variance_ratio_.sum())
+    #Check if PCA model already exists
+    pca_model_path = os.path.join(args.data_dir, "pca_model.joblib")
+    if os.path.exists(pca_model_path):
+        print(f"PCA model already exists at {pca_model_path}. Loading...")
+        pca = joblib.load(pca_model_path)
+    else:
+        print("\nFitting PCA...")
+        pca = PCA(n_components=args.components)
+        pca.fit(final_array)
+        print("PCA fitted.")
 
-    # # Save PCA model
-    # model_path = os.path.join(args.data_dir, "pca_model.joblib")
-    # joblib.dump(pca, model_path)
-    # print(f"PCA model saved to: {model_path}")
+    print("Explained variance by top components:", pca.explained_variance_ratio_[:10])
+    print("Total explained variance:", pca.explained_variance_ratio_.sum())
+    print("Number of components:", pca.n_components_)
 
-    # # Plotting original and reconstructed images
-    # sample_indices = np.random.choice(final_array.shape[0], 10, replace=False)
-    # sampled = final_array[sample_indices]
+    # Save PCA model
+    model_path = os.path.join(args.data_dir, "pca_model.joblib")
+    joblib.dump(pca, model_path)
+    print(f"PCA model saved to: {model_path}")
 
-    # print(sampled.shape)
+    # Plotting original and reconstructed images
+    sample_indices = np.random.choice(final_array.shape[0], 10, replace=False)
+    sampled = final_array[sample_indices]
+ 
+    # Reconstruct images using PCA
+    pca_features = pca.transform(sampled)
+    reconstructed = pca.inverse_transform(pca_features)
 
-    # test_img = sampled[0].reshape(140, 140, 3)  
+    # Plot original and reconstructed images side by side
+    fig, axes = plt.subplots(nrows=10, ncols=2, figsize=(6, 30))
+    for i in range(10):
+        # Original image
+        axes[i, 0].imshow(sampled[i].reshape(160, 160, 3))
+        axes[i, 0].axis("off")
+        axes[i, 0].set_title("Original")
 
-    # print("Sampled image shape:", test_img.shape)
-    # print(test_img.min(), test_img.max())
+        # Reconstructed image
+        axes[i, 1].imshow(reconstructed[i].reshape(160, 160, 3))
+        axes[i, 1].axis("off")
+        axes[i, 1].set_title("Reconstructed")
 
-    # plt.imshow(test_img)
-    # plt.axis("off")
-    # plt.title("Sampled Image")
-    # plt.show()
+    plt.tight_layout()
+    plt.savefig(os.path.join(args.data_dir, "reconstruction_comparison.pdf"), format="pdf", dpi=300, bbox_inches='tight')
 
-    #Load pca mdoel
-    # model_path = os.path.join(args.data_dir, "pca_model.joblib")
-    # pca = joblib.load(model_path)
+    del final_array
 
-    # # Reconstruct images
-    # pca_features = pca.transform(sampled)
-    # reconstructed = pca.inverse_transform(pca_features)
+    #Now use the PCA model to transform the original data and save those PCA features 
+    for file_ in numpy_files:
+        data = np.load(file_, allow_pickle=True).astype(np.uint8)
+        ground_truth_name = file_.replace("observations", "groundTruth").replace(".npy", "")
 
-    # # Save original vs reconstructed to PDF
-    # pdf_path = os.path.join(args.data_dir, "pca_reconstruction.pdf")
-    # with PdfPages(pdf_path) as pdf:
-    #     for i in range(10):
-    #         fig, axes = plt.subplots(1, 2, figsize=(6, 3))
-    #         for ax, img_data, title in zip(
-    #             axes,
-    #             [sampled[i], reconstructed[i]],
-    #             ["Original", "Reconstructed"]
-    #         ):
-    #             img = img_data.reshape(140, 140, 3)
-    #             img = np.clip(img, 0, 1)  # Ensure valid pixel range
-    #             ax.imshow(img)
-    #             ax.axis("off")
-    #             ax.set_title(title)
-    #         pdf.savefig(fig)
-    #         plt.close(fig)
+        #Load the groud truth text file into an array split by new line 
+        with open(ground_truth_name, "r") as f:
+            ground_truth = f.read().splitlines()
+        ground_truth = np.array(ground_truth)
 
-    # print(f"Saved PCA reconstruction comparison to: {pdf_path}")
+        assert len(data) == len(ground_truth), f"Data length {len(data)} does not match ground truth length {len(ground_truth)}"
+        print(f"Processing file: {file_} with shape: {data.shape}")
 
+        # Sample every nth frame and ensure final frame is included
+        sampled_indices = list(range(0, data.shape[0], args.frame_freq))
+        if sampled_indices[-1] != data.shape[0] - 1:
+            sampled_indices.append(data.shape[0] - 1)
 
-    
+        ground_truth = ground_truth[sampled_indices]
 
-# def run_pca(args):
-#     numpy_files = sorted(glob.glob(args.data_dir + "/observations/*"))
+        data = data[sampled_indices]
+        data = data.astype(np.float32) / 255.0
+        data = data.reshape(data.shape[0], -1)
 
-#     if not numpy_files:
-#         raise ValueError(f"No files found in {args.data_dir}/observations/")
+        # Transform the data using PCA
+        pca_features = pca.transform(data)
+        pca_features = pca_features.astype(np.float32)
 
-#     pca = IncrementalPCA(n_components=args.components)
+        print(f"Current pca_features shape: {pca_features.shape}")
 
-#     process = psutil.Process(os.getpid())
+        # Save PCA features
+        file_name = file_.split("/")[-1]
+        np.save(f"{args.data_dir}/pca_features/{file_name}", pca_features)
+        # Save ground truth
 
-#     for idx in range(0, len(numpy_files), args.episode_batch):
-#         print(f"\nProcessing files {idx} to {idx + args.episode_batch} out of {len(numpy_files)}")
+        with open(f"{args.data_dir}/pca_groundTruth/{file_name.replace('.npy', '')}", "w") as f:
+            f.write("\n".join(ground_truth))
 
-#         group_files = numpy_files[idx:idx + args.episode_batch]
-#         group_imgs = []
-
-#         for file_ in group_files:
-#             data = np.load(file_, allow_pickle=True).astype(np.uint8)
-
-#             data = data.astype(np.float32) / 255.0
-#             data = data.reshape(data.shape[0], -1)
-#             group_imgs.append(data)
-
-#         group_imgs = np.concatenate(group_imgs, axis=0)
-
-#         # Log RAM usage
-#         mem = process.memory_info().rss / (1024 ** 2)  # MB
-#         print(f"Memory usage before partial_fit: {mem:.2f} MB")
-
-#         pca.partial_fit(group_imgs)
-
-#         #Extract features for this episode 
-
-#         mem = process.memory_info().rss / (1024 ** 2)  # MB
-#         print(f"Memory usage after partial_fit: {mem:.2f} MB")
-
-#         print("\nExplained variance by top components:", pca.explained_variance_ratio_[:10])
-#         print("Total explained variance:", pca.explained_variance_ratio_.sum())
+        print(f"PCA features saved to: {args.data_dir}/pca_features/{file_name}")
+        print(f"Ground truth saved to: {args.data_dir}/pca_groundTruth/{file_name.replace('.npy', '')}")
 
 
-#     print("\nFinalizing PCA...")
-#     print("Final Explained variance by top components:", pca.explained_variance_ratio_[:10])
-#     print("Final Total explained variance:", pca.explained_variance_ratio_.sum())
+    #Save arguments and PCA details to stats.json file 
+    stats = {
+        "args": vars(args),
+        "pca_components": int(pca.n_components_),
+        "explained_variance_ratio": pca.explained_variance_ratio_.tolist(),
+        "total_explained_variance": float(pca.explained_variance_ratio_.sum())
+    }
+    stats_file = os.path.join(args.data_dir, "pca_stats.json")
+    with open(stats_file, "w") as f:
+        json.dump(stats, f, indent=4)
+    print(f"Stats saved to: {stats_file}")
 
-
-#     print("\nSaving PCA features...")
-#     for file_ in tqdm(numpy_files):
-#         data = np.load(file_, allow_pickle=True)
-#         data = data.astype(np.float32) / 255.0
-#         flattened_images = []
-#         file_name = file_.split("/")[-1]
-
-#         for frame in data:
-#             img = frame['image']
-#             img = img.astype(np.float32) / 255.0
-#             img = img.flatten()
-
-#             #Transform the image using the PCA model
-#             img = pca.transform([img])[0]
-#             flattened_images.append(img)
-
-#         flattened_images = np.array(flattened_images)
-#         np.save(f"{args.data_dir}/pca_features/{file_name}", flattened_images)
-
-#     print("PCA features saved to disk.")
-
-
-#     random_files = random.sample(numpy_files, 5)
-
-#     og_imgs = []
-#     reconstructed_imgs = []
-
-#     for file_ in random_files:
-#         data = np.load(file_, allow_pickle=True).astype(np.uint8)
-#         #Choose a random index from 1 to the length of the data
-#         random_index = random.randint(1, len(data))
-
-#         img = data[random_index]
-#         img = img.astype(np.float32) / 255.0
-#         pca_image = pca.transform([img.flatten()])[0]
-
-#         reconstructed_img = pca.inverse_transform(pca_image)
-#         reconstructed_img = reconstructed_img.reshape(140, 140, 3)
-
-#         og_imgs.append(img)
-#         reconstructed_imgs.append(reconstructed_img)
-
-
-#     #Plot the original images and reconstructed images side by side and save as pdf
-#     fig, ax = plt.subplots(5, 2, figsize=(10, 20))
-
-#     for i in range(5):
-#         ax[i, 0].imshow(og_imgs[i])
-#         ax[i, 0].set_title("Original Image")
-#         ax[i, 0].axis('off')
-
-#         ax[i, 1].imshow(reconstructed_imgs[i])
-#         ax[i, 1].set_title("Reconstructed Image")
-#         ax[i, 1].axis('off')
-
-#     plt.tight_layout()
-#     plt.savefig(f"{args.data_dir}/reconstructed_images.pdf")
-#     plt.show()
 
 
 if __name__ == "__main__":
     parser = ArgumentParser("Run pretrained models on MineRL environment")
 
     parser.add_argument("--data-dir", type=str, default="Data/wooden_pickaxe")
-    parser.add_argument("--components", type=int, default=1000)
-    parser.add_argument("--batch-size", type=int, default=8000)
+    parser.add_argument("--frame-freq", type=int, default=6)
+    parser.add_argument("--components", type=int, default=1500)
 
     args = parser.parse_args()
-
-    # os.makedirs(args.data_dir + "/pca_features", exist_ok=True)
-
     run_pca(args)
