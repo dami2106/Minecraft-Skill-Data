@@ -89,10 +89,15 @@ def run_pca(args):  # NEW: add sampling frequency as a parameter
         print(f"PCA model already exists at {pca_model_path}. Loading...")
         pca = joblib.load(pca_model_path)
     else:
-        print("\nFitting PCA...")
-        pca = PCA(n_components=args.components)
+        # print("\nFitting PCA...")
+        # pca = PCA(n_components=0.99)
+        # pca.fit(final_array)
+        # print("PCA fitted.")
+
+        print("\nFitting Incremental PCA...")
+        pca = IncrementalPCA(n_components=4000, batch_size=20000)
         pca.fit(final_array)
-        print("PCA fitted.")
+        print("Incremental PCA fitted.")
 
     print("Explained variance by top components:", pca.explained_variance_ratio_[:10])
     print("Total explained variance:", pca.explained_variance_ratio_.sum())
@@ -190,7 +195,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--data-dir", type=str, default="Data/wooden_pickaxe")
     parser.add_argument("--frame-freq", type=int, default=6)
-    parser.add_argument("--components", type=int, default=1500)
+    # parser.add_argument("--components", type=int, default=1500)
 
     args = parser.parse_args()
     run_pca(args)
