@@ -1,4 +1,3 @@
-<pre>
 # Minecraft Skill Data 
 
 This dataset and toolkit build upon the foundation of OpenAI's VPT models, extending them with enhanced planning and visualization tools for Minecraft skill learning. We include tools for **automatic labelling**, **PCA feature extraction**, and **action-feature alignment**. 
